@@ -57,6 +57,7 @@ import {
   isTorrentLikeType,
 } from '@shared/types/task-actions'
 import type { TaskActivityRecorder } from '@shared/types/task-activity'
+import { classifyDownload } from '@shared/utils/download-category'
 import type Database from 'better-sqlite3'
 import {
   acquireBtInfoHashAdmission,
@@ -98,6 +99,10 @@ import {
   type DirectResourceValidatorService,
   sanitizeRemoteFilename,
 } from './direct-resource-validator'
+import {
+  categoryAdmissionDirectory,
+  categorySaveDirectory,
+} from './download-category-directory'
 import type { FinalNamePicker } from './final-name-picker'
 import { findPathOverrun } from './path-length'
 import { toTempPath } from './paths'
@@ -325,26 +330,31 @@ async function createAdmittedTask(
     const preparedDir = deps.prepareSaveDir
       ? await deps.prepareSaveDir(requestedDir)
       : requestedDir
-    return withBtOutputAdmission(preparedDir, () =>
-      policy
-        ? policy.runWithSnapshot((snapshot, lease) =>
-            handleCreateTaskUnderAdmission(
+    return withBtOutputAdmission(
+      categoryAdmissionDirectory(
+        preparedDir,
+        deps.settingsManager.getApp().autoCategorizeDownloads === true
+      ),
+      () =>
+        policy
+          ? policy.runWithSnapshot((snapshot, lease) =>
+              handleCreateTaskUnderAdmission(
+                rawRequest,
+                deps,
+                opts,
+                snapshot,
+                lease.assertCurrent,
+                preparedDir
+              )
+            )
+          : handleCreateTaskUnderAdmission(
               rawRequest,
               deps,
               opts,
-              snapshot,
-              lease.assertCurrent,
+              null,
+              undefined,
               preparedDir
             )
-          )
-        : handleCreateTaskUnderAdmission(
-            rawRequest,
-            deps,
-            opts,
-            null,
-            undefined,
-            preparedDir
-          )
     )
   }
   if (!parsed.success || parsed.data.type !== 'bt') {
@@ -358,15 +368,20 @@ async function createAdmittedTask(
     ? await deps.prepareSaveDir(requestedSaveDir)
     : requestedSaveDir
   const createBtTask = () =>
-    withBtOutputAdmission(preparedSaveDir, () =>
-      handleCreateTaskUnderAdmission(
-        rawRequest,
-        deps,
-        opts,
-        undefined,
-        undefined,
-        preparedSaveDir
-      )
+    withBtOutputAdmission(
+      categoryAdmissionDirectory(
+        preparedSaveDir,
+        deps.settingsManager.getApp().autoCategorizeDownloads === true
+      ),
+      () =>
+        handleCreateTaskUnderAdmission(
+          rawRequest,
+          deps,
+          opts,
+          undefined,
+          undefined,
+          preparedSaveDir
+        )
     )
   let infoHash =
     req.payload.kind === 'magnet'
@@ -418,11 +433,19 @@ async function handleCreateTaskUnderAdmission(
     ]).map((source) => source.sourceUrl)
 
   const requestedSaveDir = req.saveDir || appSettings.defaultSaveDir
-  const effectiveSaveDir =
+  const baseSaveDir =
     preparedSaveDir ??
     (deps.prepareSaveDir
       ? await deps.prepareSaveDir(requestedSaveDir)
       : requestedSaveDir)
+  let effectiveSaveDir = baseSaveDir
+  const autoCategorize = appSettings.autoCategorizeDownloads === true
+  const prepareCategoryDirectory = async (name: string): Promise<string> => {
+    const directory = categorySaveDirectory(baseSaveDir, name, autoCategorize)
+    return directory !== baseSaveDir && deps.prepareSaveDir
+      ? deps.prepareSaveDir(directory)
+      : directory
+  }
   const taskId = newTaskId()
 
   log.info(
@@ -460,6 +483,11 @@ async function handleCreateTaskUnderAdmission(
       )
     }
   }
+
+  const desiredName = deriveDesiredName(req, torrentInfoName)
+  effectiveSaveDir = await prepareCategoryDirectory(
+    parsedBtLayout?.multiFile ? '' : desiredName
+  )
 
   const btInfoHash =
     req.type !== 'bt'
@@ -547,7 +575,6 @@ async function handleCreateTaskUnderAdmission(
   }
 
   // 1. Decide final on-disk name (handles collisions).
-  const desiredName = deriveDesiredName(req, torrentInfoName)
   const existingName = sanitizeFinalizeFilename(desiredName)
   if (
     req.type === 'bt' &&
@@ -562,15 +589,19 @@ async function handleCreateTaskUnderAdmission(
   ) {
     throw existingFilesConflict(btInfoHash, effectiveSaveDir)
   }
-  const reservedNames = reservedBtFinalNames(
-    deps.taskManager.getAll(),
-    effectiveSaveDir,
-    req.type === 'bt' ? req.existingTaskId : undefined
-  )
-  const pickHttpFinalName = (desired: string) =>
-    reservedNames.length > 0
-      ? deps.finalNamePicker.pick(effectiveSaveDir, desired, reservedNames)
+  const getReservedNames = () =>
+    reservedBtFinalNames(
+      deps.taskManager.getAll(),
+      effectiveSaveDir,
+      req.type === 'bt' ? req.existingTaskId : undefined
+    )
+  const reservedNames = getReservedNames()
+  const pickHttpFinalName = (desired: string) => {
+    const reserved = getReservedNames()
+    return reserved.length > 0
+      ? deps.finalNamePicker.pick(effectiveSaveDir, desired, reserved)
       : deps.finalNamePicker.pick(effectiveSaveDir, desired)
+  }
   let finalName = useExistingFiles
     ? existingName
     : req.type === 'bt'
@@ -758,10 +789,19 @@ async function handleCreateTaskUnderAdmission(
     let currentHttpDesiredName = desiredName
     const pickHttpName = async (nextDesiredName: string): Promise<void> => {
       if (nextDesiredName === currentHttpDesiredName) return
+      effectiveSaveDir = await prepareCategoryDirectory(nextDesiredName)
+      await ensureDirectory(effectiveSaveDir)
       finalName = await pickHttpFinalName(nextDesiredName)
       currentHttpDesiredName = nextDesiredName
       finalPath = path.join(effectiveSaveDir, finalName)
       diskPath = toTempPath(finalPath)
+      const overrun = findPathOverrun([diskPath, finalPath], process.platform)
+      if (overrun)
+        throw new AppError(
+          ErrorCode.TaskPathTooLong,
+          `task path too long: ${overrun.length}/${overrun.limit}: ${overrun.path}`
+        )
+      params.saveDir = effectiveSaveDir
       params.filename = `${finalName}${INCOMPLETE_SUFFIX}`
     }
 
@@ -779,6 +819,9 @@ async function handleCreateTaskUnderAdmission(
       if (uri) {
         const muxResult = await deps.resolveToMux(uri)
         if (muxResult) {
+          effectiveSaveDir = await prepareCategoryDirectory(
+            `video.${muxResult.container}`
+          )
           const sanitizedHeaders = muxResult.headers
             ? stripHopByHopHeaders(muxResult.headers)
             : {}
@@ -989,10 +1032,6 @@ async function handleCreateTaskUnderAdmission(
           resourceMetadata = requestContext
             ? await deps.directResourceValidator.probe(uri, requestContext)
             : null
-          const remoteName = resourceMetadata?.filename
-            ? sanitizeRemoteFilename(resourceMetadata.filename)
-            : null
-          if (remoteName) await pickHttpName(remoteName)
         } catch {
           // Fetch/proxy errors may echo signed URLs or credentials. Keep the
           // optional fallback diagnostic limited to the non-secret host.
@@ -1001,6 +1040,10 @@ async function handleCreateTaskUnderAdmission(
             'remote resource metadata probe skipped'
           )
         }
+        const remoteName = resourceMetadata?.filename
+          ? sanitizeRemoteFilename(resourceMetadata.filename)
+          : null
+        if (remoteName) await pickHttpName(remoteName)
       }
     }
 
@@ -1172,6 +1215,7 @@ async function handleCreateTaskUnderAdmission(
     kind: taskKind,
     type: taskType,
     saveDir: effectiveSaveDir,
+    category: parsedBtLayout?.multiFile ? 'other' : classifyDownload(finalName),
     createdAt: now,
     updatedAt: now,
     uris: canonicalUris,
