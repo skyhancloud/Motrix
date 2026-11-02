@@ -420,23 +420,6 @@ export function DownloadsPage() {
           footer={<GlobalStatsBar />}
           contentClassName="px-6"
         >
-          {category ? (
-            <div className="flex shrink-0 items-center justify-between gap-3 text-xs text-muted-foreground">
-              <span>{t(`downloadCategories.${category}`)}</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  const next = new URLSearchParams(searchParams)
-                  next.delete('category')
-                  next.delete('task')
-                  setSearchParams(next)
-                }}
-              >
-                {t('downloadCategories.showAll')}
-              </Button>
-            </div>
-          ) : null}
           {status === 'error' && hasReadySnapshot ? (
             <TaskListStaleBanner onRetry={() => void retry()} />
           ) : null}

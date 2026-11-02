@@ -4,6 +4,7 @@ export const DOWNLOAD_CATEGORIES = [
   'compressed',
   'documents',
   'music',
+  'images',
   'programs',
   'video',
   'other',
@@ -14,10 +15,11 @@ export type DownloadCategory = z.infer<typeof downloadCategorySchema>
 
 /** Stable folder names, independent of the display language. */
 export const DOWNLOAD_CATEGORY_FOLDERS: Record<DownloadCategory, string> = {
-  compressed: 'Compressed',
+  compressed: 'Archives',
   documents: 'Documents',
   music: 'Music',
-  programs: 'Programs',
-  video: 'Video',
+  images: 'Images',
+  programs: 'Installers',
+  video: 'Videos',
   other: 'Other',
 }

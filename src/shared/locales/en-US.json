@@ -3464,14 +3464,15 @@
   },
   "downloadCategories": {
     "label": "Download categories",
-    "compressed": "Compressed",
+    "compressed": "Archives",
     "documents": "Documents",
     "music": "Music",
-    "programs": "Programs",
-    "video": "Video",
+    "images": "Images",
+    "programs": "Installers",
+    "video": "Videos",
     "other": "Other",
     "showAll": "Show all categories",
     "autoSort": "Automatically organize downloads",
-    "autoSortDesc": "Save new downloads in Compressed, Documents, Music, Programs, Video or Other subfolders of the selected folder. Existing files stay in place. Multi-file torrents stay together in Other."
+    "autoSortDesc": "Save new downloads in Archives, Documents, Music, Images, Installers, Videos or Other subfolders of the selected folder. Existing files stay in place. Multi-file torrents stay together in Other."
   }
 }

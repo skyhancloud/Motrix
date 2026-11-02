@@ -349,7 +349,7 @@ describe('MediaTaskCoordinator.start', () => {
   })
 
   it('routes media into its category before reserving a name and persisting the job', async () => {
-    const destination = path.join('/save', 'Video')
+    const destination = path.join('/save', 'Videos')
     const { deps, taskManager } = makeDeps({
       prepareMediaSaveDir: vi.fn(async () => destination),
       makeDownloader: () => makeDownloaderFake({ hang: true }) as never,

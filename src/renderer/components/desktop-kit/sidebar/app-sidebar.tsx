@@ -1,11 +1,13 @@
 import type { MotrixIcon } from '@renderer/components/icons'
 import {
   AudioIcon,
+  ChevronDownIcon,
   DashboardIcon,
   DocumentIcon,
   DownloadLibraryIcon,
   FilesIcon,
   FolderIcon,
+  ImageIcon,
   InstallIcon,
   MigrationIcon,
   PluginIcon,
@@ -37,6 +39,7 @@ import {
   type DownloadCategory,
   downloadCategorySchema,
 } from '@shared/schemas/download-category'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, NavLink, useLocation, useSearchParams } from 'react-router'
 
@@ -44,6 +47,7 @@ const CATEGORY_ICONS: Record<DownloadCategory, MotrixIcon> = {
   compressed: FilesIcon,
   documents: DocumentIcon,
   music: AudioIcon,
+  images: ImageIcon,
   programs: InstallIcon,
   video: VideoIcon,
   other: FolderIcon,
@@ -76,6 +80,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
     searchParams.get('category')
   )
   const category = parsedCategory.success ? parsedCategory.data : null
+  const [categoriesOpen, setCategoriesOpen] = useState(() => category !== null)
+  useEffect(() => {
+    if (category) setCategoriesOpen(true)
+  }, [category])
   const { visible } = useLegacyImportNavigation()
   const items = visible
     ? [
@@ -113,6 +121,18 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                       aria-current={
                         item.to === '/downloads' && category ? false : undefined
                       }
+                      aria-expanded={
+                        item.to === '/downloads' ? categoriesOpen : undefined
+                      }
+                      aria-controls={
+                        item.to === '/downloads'
+                          ? 'downloads-categories'
+                          : undefined
+                      }
+                      onClick={() => {
+                        if (item.to === '/downloads')
+                          setCategoriesOpen((open) => !open)
+                      }}
                     >
                       {({ isActive }) => (
                         <SidebarMenuButton
@@ -127,11 +147,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                           <span className="select-none">
                             {t(item.labelKey)}
                           </span>
+                          {item.to === '/downloads' ? (
+                            <ChevronDownIcon
+                              className={`ml-auto size-4 transition-transform ${
+                                categoriesOpen ? 'rotate-180' : ''
+                              }`}
+                            />
+                          ) : null}
                         </SidebarMenuButton>
                       )}
                     </NavLink>
-                    {item.to === '/downloads' ? (
+                    {item.to === '/downloads' && categoriesOpen ? (
                       <SidebarMenuSub
+                        id="downloads-categories"
                         aria-label={t('downloadCategories.label')}
                       >
                         {DOWNLOAD_CATEGORIES.map((key) => {

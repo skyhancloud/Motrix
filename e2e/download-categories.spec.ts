@@ -29,7 +29,7 @@ async function invoke<T>(
   )
 }
 
-test('downloads into six category folders and filters the real task list', async ({
+test('downloads into seven category folders and filters the real task list', async ({
   electronApp,
   mainWindow,
   userDataDir,
@@ -41,12 +41,13 @@ test('downloads into six category folders and filters the real task list', async
   })
   const fixtures: HttpFixture[] = []
   const samples = [
-    ['Compressed', 'archive.zip'],
-    ['Documents', 'manual.pdf'],
-    ['Music', 'song.mp3'],
-    ['Programs', 'setup.exe'],
-    ['Video', 'clip.mp4'],
-    ['Other', 'unknown.bin'],
+    ['Archives', 'archive.zip', 'compressed'],
+    ['Documents', 'manual.pdf', 'documents'],
+    ['Music', 'song.mp3', 'music'],
+    ['Images', 'photo.png', 'images'],
+    ['Installers', 'setup.exe', 'programs'],
+    ['Videos', 'clip.mp4', 'video'],
+    ['Other', 'unknown.bin', 'other'],
   ] as const
   const saveDir = path.join(userDataDir, 'downloads')
   try {
@@ -85,11 +86,12 @@ test('downloads into six category folders and filters the real task list', async
         },
         { timeout: 60_000 }
       )
-      .toBe(6)
+      .toBe(7)
     const tasks = await invoke<DownloadTask[]>(mainWindow, Queries.ListTasks)
-    for (const [index, [folder, filename]] of samples.entries()) {
+    await mainWindow.getByRole('link', { name: 'Downloads', exact: true }).click()
+    for (const [index, [folder, filename, category]] of samples.entries()) {
       const task = tasks.find((task) => task.finalName === filename)!
-      expect(task.category).toBe(folder.toLowerCase())
+      expect(task.category).toBe(category)
       expect(task.finalPath).toBe(path.join(saveDir, folder, filename))
       expect(await fixtures[index].verifyFile(task.finalPath)).toBe(true)
       await mainWindow.getByRole('link', { name: folder, exact: true }).click()
@@ -102,7 +104,7 @@ test('downloads into six category folders and filters the real task list', async
     await mainWindow
       .getByRole('link', { name: 'Downloads', exact: true })
       .click()
-    await expect(mainWindow.locator('[data-task-id]')).toHaveCount(6)
+    await expect(mainWindow.locator('[data-task-id]')).toHaveCount(7)
     await mainWindow.screenshot({
       path: testInfo.outputPath('download-categories.png'),
     })

@@ -3533,11 +3533,12 @@ describe('verified existing torrent adoption', () => {
 
 describe('automatic download categories', () => {
   it.each([
-    ['archive.zip', 'Compressed', 'compressed'],
+    ['archive.zip', 'Archives', 'compressed'],
     ['manual.pdf', 'Documents', 'documents'],
     ['song.mp3', 'Music', 'music'],
-    ['setup.exe', 'Programs', 'programs'],
-    ['movie.mp4', 'Video', 'video'],
+    ['photo.png', 'Images', 'images'],
+    ['setup.exe', 'Installers', 'programs'],
+    ['movie.mp4', 'Videos', 'video'],
     ['unknown.bin', 'Other', 'other'],
   ])('routes %s before engine dispatch', async (filename, folder, category) => {
     const deps = makeDeps({ autoCategorizeDownloads: true })
@@ -3569,17 +3570,17 @@ describe('automatic download categories', () => {
     await handleCreateTask(httpRequest(), deps)
     expect(lastAddedTask(deps)).toMatchObject({
       category: 'programs',
-      saveDir: path.join('/d', 'Programs'),
+      saveDir: path.join('/d', 'Installers'),
       finalName: 'setup.exe',
     })
     expect(deps.addUri.mock.calls[0][1]).toMatchObject({
-      dir: path.join('/d', 'Programs'),
+      dir: path.join('/d', 'Installers'),
     })
   })
 
   it('applies host directory authorization to a discovered category', async () => {
     const prepare = vi.fn(async (dir: string) => {
-      if (dir === path.join('/d', 'Programs'))
+      if (dir === path.join('/d', 'Installers'))
         throw new Error('directory denied')
       return dir
     })
@@ -3617,7 +3618,7 @@ describe('automatic download categories', () => {
       deps
     )
     expect(lastAddedTask(deps)).toMatchObject({
-      saveDir: path.join('/d', 'Compressed'),
+      saveDir: path.join('/d', 'Archives'),
       category: 'compressed',
     })
   })
@@ -3638,7 +3639,7 @@ describe('automatic download categories', () => {
       deps
     )
     expect(lastAddedTask(deps)).toMatchObject({
-      saveDir: path.join('/d', 'Video'),
+      saveDir: path.join('/d', 'Videos'),
       category: 'video',
     })
   })

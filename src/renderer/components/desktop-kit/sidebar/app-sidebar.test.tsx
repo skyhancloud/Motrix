@@ -6,7 +6,7 @@ import { useLegacyImportSidebar } from '@renderer/features/legacy-import/sidebar
 import { transport } from '@renderer/lib/transport'
 import { Events } from '@shared/protocol/events'
 import { Queries } from '@shared/protocol/queries'
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactElement } from 'react'
 import { MemoryRouter } from 'react-router'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -82,26 +82,38 @@ function wrap(ui: ReactElement, initialEntries: string[] = ['/']) {
 }
 
 describe('AppSidebar', () => {
-  it('renders all six category links below Downloads', () => {
+  it('opens and closes the category menu from Downloads', () => {
     render(wrap(<AppSidebar />))
-    for (const label of [
-      'Compressed',
-      'Documents',
-      'Music',
-      'Programs',
-      'Video',
-      'Other',
-    ]) {
+    expect(
+      screen.queryByRole('link', { name: 'Archives' })
+    ).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('link', { name: 'Downloads' }))
+
+    for (const [label, key] of [
+      ['Archives', 'compressed'],
+      ['Documents', 'documents'],
+      ['Music', 'music'],
+      ['Images', 'images'],
+      ['Installers', 'programs'],
+      ['Videos', 'video'],
+      ['Other', 'other'],
+    ] as const) {
       expect(screen.getByRole('link', { name: label })).toHaveAttribute(
         'href',
-        `/downloads/all?category=${label.toLowerCase()}`
+        `/downloads/all?category=${key}`
       )
     }
+
+    fireEvent.click(screen.getByRole('link', { name: 'Downloads' }))
+    expect(
+      screen.queryByRole('link', { name: 'Archives' })
+    ).not.toBeInTheDocument()
   })
 
   it('selects only the active category when browsing a category', () => {
     render(wrap(<AppSidebar />, ['/downloads/all?category=video']))
-    expect(screen.getByRole('link', { name: 'Video' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Videos' })).toHaveAttribute(
       'aria-current',
       'page'
     )

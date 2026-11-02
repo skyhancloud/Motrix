@@ -177,12 +177,15 @@ describe.skipIf(!bundledAria2Exists() || !canBindLoopbackTcp())(
           { timeout: 10_000, interval: 50 }
         )
         expect(task.finalName).toBe(filename)
+        const category = filename.endsWith('.exe')
+          ? 'programs'
+          : 'compressed'
         const categoryFolder = filename.endsWith('.exe')
-          ? 'Programs'
-          : 'Compressed'
+          ? 'Installers'
+          : 'Archives'
         const destination = path.join(dir, categoryFolder)
         expect(task.saveDir).toBe(destination)
-        expect(task.category).toBe(categoryFolder.toLowerCase())
+        expect(task.category).toBe(category)
         await finalizeTask(taskId, {
           taskManager: Object.assign(deps.taskManager, {
             persist: async () => {},
@@ -287,8 +290,8 @@ describe.skipIf(!bundledAria2Exists() || !canBindLoopbackTcp())(
         expect(await readFile(task.diskPath, 'utf8')).toBe(`fixture:/${key}`)
         return task
       }
-      const oldCategoryDir = path.join(oldDir, 'Compressed')
-      const newCategoryDir = path.join(newDir, 'Compressed')
+      const oldCategoryDir = path.join(oldDir, 'Archives')
+      const newCategoryDir = path.join(newDir, 'Archives')
       const first = await submit('first-download', oldCategoryDir, 'file.zip')
       await settings.update({ app: { defaultSaveDir: newDir } })
       await wired.rpc.changeGlobalOption({ dir: newDir })
